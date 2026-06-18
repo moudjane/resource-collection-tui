@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -264,6 +264,26 @@ fn discover_surroundings(
     }
 }
 
+fn push_recent_position(recent: &mut VecDeque<Position>, pos: Position, capacity: usize) {
+    if recent.back().copied() != Some(pos) {
+        recent.push_back(pos);
+    }
+    while recent.len() > capacity {
+        recent.pop_front();
+    }
+}
+
+fn choose_non_repeating_position(
+    candidates: &[Position],
+    recent: &VecDeque<Position>,
+) -> Option<Position> {
+    candidates
+        .iter()
+        .copied()
+        .find(|candidate| !recent.contains(candidate))
+        .or_else(|| candidates.first().copied())
+}
+
 fn step_towards(world: &WorldState, from: Position, target: Position) -> Position {
     let dx = (target.x - from.x).signum();
     let dy = (target.y - from.y).signum();
@@ -302,6 +322,7 @@ fn spawn_scout(
         let mut known_obstacles = HashSet::new();
         let mut known_resources = HashSet::new();
         let mut rng = rand::rng();
+        let mut recent_positions = VecDeque::with_capacity(4);
         while running.load(Ordering::Relaxed) {
             let current = {
                 let world = world.lock().expect("world lock poisoned");
@@ -321,12 +342,17 @@ fn spawn_scout(
                     world.map.is_passable(*p) && !known_obstacles.contains(p)
                 })
                 .collect();
-            let next = if options.is_empty() {
-                current
-            } else {
-                options[rng.random_range(0..options.len())]
-            };
+            let next = choose_non_repeating_position(&options, &recent_positions)
+                .unwrap_or_else(|| {
+                    if options.is_empty() {
+                        current
+                    } else {
+                        options[rng.random_range(0..options.len())]
+                    }
+                });
             let _ = tx.send(Message::RobotMoved { id, pos: next });
+            push_recent_position(&mut recent_positions, current, 4);
+            push_recent_position(&mut recent_positions, next, 4);
             thread::sleep(Duration::from_millis(75));
         }
     })
