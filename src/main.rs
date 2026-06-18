@@ -320,34 +320,6 @@ fn choose_non_repeating_position(
         .or_else(|| candidates.first().copied())
 }
 
-fn step_towards(world: &WorldState, from: Position, target: Position) -> Position {
-    let dx = (target.x - from.x).signum();
-    let dy = (target.y - from.y).signum();
-    let preferred = [
-        Position {
-            x: from.x + dx,
-            y: from.y,
-        },
-        Position {
-            x: from.x,
-            y: from.y + dy,
-        },
-        Position {
-            x: from.x + dx,
-            y: from.y + dy,
-        },
-    ];
-    for candidate in preferred {
-        if candidate != from && world.map.is_passable(candidate) {
-            return candidate;
-        }
-    }
-    neighbors(from)
-        .into_iter()
-        .find(|p| world.map.is_passable(*p))
-        .unwrap_or(from)
-}
-
 fn step_towards_avoiding_recent(
     world: &WorldState,
     from: Position,
@@ -732,5 +704,12 @@ mod tests {
     fn scout_cannot_collect_resources() {
         assert!(!RobotKind::Scout.can_collect());
         assert!(RobotKind::Collector.can_collect());
+    }
+
+    #[test]
+    fn prefers_fresh_positions_over_recent_ones() {
+        let recent = VecDeque::from([Position { x: 1, y: 0 }, Position { x: 0, y: 1 }]);
+        let candidates = [Position { x: 1, y: 0 }, Position { x: 2, y: 0 }, Position { x: 0, y: 1 }];
+        assert_eq!(choose_non_repeating_position(&candidates, &recent), Some(Position { x: 2, y: 0 }));
     }
 }
