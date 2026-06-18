@@ -194,3 +194,7 @@ pub(crate) enum Message {
     ResourceDepleted(Position),
     Deposited(ResourceKind),
 }
+
+#[cfg(test)]
+#[path = "model_tests.rs"]
+mod model_tests;
