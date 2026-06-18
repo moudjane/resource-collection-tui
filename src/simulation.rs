@@ -370,3 +370,7 @@ pub(crate) fn process_messages(world: &Arc<Mutex<WorldState>>, rx: &Receiver<Mes
         }
     }
 }
+
+#[cfg(test)]
+#[path = "simulation_tests.rs"]
+mod simulation_tests;
