@@ -264,6 +264,42 @@ fn discover_surroundings(
     }
 }
 
+fn is_frontier_tile(world: &WorldState, known_tiles: &HashSet<Position>, pos: Position) -> bool {
+    matches!(world.map.tile_at(pos), Some(tile) if !matches!(tile, Tile::Obstacle))
+        && neighbors(pos)
+            .into_iter()
+            .any(|neighbor| world.map.in_bounds(neighbor) && !known_tiles.contains(&neighbor))
+}
+
+fn bfs_next_step_towards<F>(world: &WorldState, start: Position, is_goal: F) -> Option<Position>
+where
+    F: Fn(Position) -> bool,
+{
+    let mut queue = VecDeque::from([start]);
+    let mut came_from = HashMap::new();
+    came_from.insert(start, start);
+
+    while let Some(current) = queue.pop_front() {
+        if current != start && is_goal(current) {
+            let mut step = current;
+            while came_from[&step] != start {
+                step = came_from[&step];
+            }
+            return Some(step);
+        }
+
+        for neighbor in neighbors(current) {
+            if !world.map.is_passable(neighbor) || came_from.contains_key(&neighbor) {
+                continue;
+            }
+            came_from.insert(neighbor, current);
+            queue.push_back(neighbor);
+        }
+    }
+
+    None
+}
+
 fn push_recent_position(recent: &mut VecDeque<Position>, pos: Position, capacity: usize) {
     if recent.back().copied() != Some(pos) {
         recent.push_back(pos);
