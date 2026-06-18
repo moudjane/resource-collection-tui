@@ -348,6 +348,50 @@ fn step_towards(world: &WorldState, from: Position, target: Position) -> Positio
         .unwrap_or(from)
 }
 
+fn step_towards_avoiding_recent(
+    world: &WorldState,
+    from: Position,
+    target: Position,
+    recent: &VecDeque<Position>,
+) -> Position {
+    let dx = (target.x - from.x).signum();
+    let dy = (target.y - from.y).signum();
+    let preferred = [
+        Position {
+            x: from.x + dx,
+            y: from.y,
+        },
+        Position {
+            x: from.x,
+            y: from.y + dy,
+        },
+        Position {
+            x: from.x + dx,
+            y: from.y + dy,
+        },
+    ];
+
+    if let Some(candidate) = preferred
+        .into_iter()
+        .find(|candidate| *candidate != from && world.map.is_passable(*candidate) && !recent.contains(candidate))
+    {
+        return candidate;
+    }
+
+    if let Some(candidate) = preferred
+        .into_iter()
+        .find(|candidate| *candidate != from && world.map.is_passable(*candidate))
+    {
+        return candidate;
+    }
+
+    let passable_neighbors: Vec<_> = neighbors(from)
+        .into_iter()
+        .filter(|p| world.map.is_passable(*p))
+        .collect();
+    choose_non_repeating_position(&passable_neighbors, recent).unwrap_or(from)
+}
+
 fn spawn_scout(
     id: usize,
     world: Arc<Mutex<WorldState>>,
@@ -434,6 +478,7 @@ fn spawn_collector(
     thread::spawn(move || {
         let mut carrying: Option<ResourceKind> = None;
         let mut rng = rand::rng();
+        let mut recent_positions = VecDeque::with_capacity(6);
         while running.load(Ordering::Relaxed) {
             let (current, base, known_resources) = {
                 let world = world.lock().expect("world lock poisoned");
@@ -446,13 +491,15 @@ fn spawn_collector(
             if let Some(kind) = carrying {
                 let next = {
                     let world = world.lock().expect("world lock poisoned");
-                    step_towards(&world, current, base)
+                    step_towards_avoiding_recent(&world, current, base, &recent_positions)
                 };
                 let _ = tx.send(Message::RobotMoved { id, pos: next });
                 if next == base {
                     let _ = tx.send(Message::Deposited(kind));
                     carrying = None;
                 }
+                push_recent_position(&mut recent_positions, current, 6);
+                push_recent_position(&mut recent_positions, next, 6);
                 thread::sleep(Duration::from_millis(80));
                 continue;
             }
@@ -499,9 +546,11 @@ fn spawn_collector(
                 } else {
                     let next = {
                         let world = world.lock().expect("world lock poisoned");
-                        step_towards(&world, current, target)
+                        step_towards_avoiding_recent(&world, current, target, &recent_positions)
                     };
                     let _ = tx.send(Message::RobotMoved { id, pos: next });
+                    push_recent_position(&mut recent_positions, current, 6);
+                    push_recent_position(&mut recent_positions, next, 6);
                 }
             } else {
                 let options: Vec<_> = {
@@ -512,8 +561,11 @@ fn spawn_collector(
                         .collect()
                 };
                 if !options.is_empty() {
-                    let next = options[rng.random_range(0..options.len())];
+                    let next = choose_non_repeating_position(&options, &recent_positions)
+                        .unwrap_or_else(|| options[rng.random_range(0..options.len())]);
                     let _ = tx.send(Message::RobotMoved { id, pos: next });
+                    push_recent_position(&mut recent_positions, current, 6);
+                    push_recent_position(&mut recent_positions, next, 6);
                 }
             }
             thread::sleep(Duration::from_millis(80));
