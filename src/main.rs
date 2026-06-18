@@ -357,6 +357,7 @@ fn spawn_scout(
     thread::spawn(move || {
         let mut known_obstacles = HashSet::new();
         let mut known_resources = HashSet::new();
+        let mut known_tiles = HashSet::new();
         let mut rng = rand::rng();
         let mut recent_positions = VecDeque::with_capacity(4);
         while running.load(Ordering::Relaxed) {
@@ -371,21 +372,51 @@ fn spawn_scout(
                 &mut known_obstacles,
                 &mut known_resources,
             );
-            let options: Vec<_> = neighbors(current)
-                .into_iter()
-                .filter(|p| {
-                    let world = world.lock().expect("world lock poisoned");
-                    world.map.is_passable(*p) && !known_obstacles.contains(p)
-                })
-                .collect();
-            let next = choose_non_repeating_position(&options, &recent_positions)
-                .unwrap_or_else(|| {
-                    if options.is_empty() {
-                        current
-                    } else {
-                        options[rng.random_range(0..options.len())]
+            {
+                let world = world.lock().expect("world lock poisoned");
+                for dy in -1..=1 {
+                    for dx in -1..=1 {
+                        let pos = Position {
+                            x: current.x + dx,
+                            y: current.y + dy,
+                        };
+                        if world.map.in_bounds(pos) {
+                            known_tiles.insert(pos);
+                        }
                     }
+                }
+            }
+
+            let next = {
+                let world = world.lock().expect("world lock poisoned");
+                let frontier_step = bfs_next_step_towards(&world, current, |pos| {
+                    is_frontier_tile(&world, &known_tiles, pos)
                 });
+
+                frontier_step
+                    .and_then(|step| {
+                        if recent_positions.contains(&step) {
+                            None
+                        } else {
+                            Some(step)
+                        }
+                    })
+                    .or(frontier_step)
+                    .unwrap_or_else(|| {
+                        let options: Vec<_> = neighbors(current)
+                            .into_iter()
+                            .filter(|p| world.map.is_passable(*p) && !known_obstacles.contains(p))
+                            .collect();
+                        choose_non_repeating_position(&options, &recent_positions)
+                            .unwrap_or_else(|| {
+                                if options.is_empty() {
+                                    current
+                                } else {
+                                    options[rng.random_range(0..options.len())]
+                                }
+                            })
+                    })
+            };
             let _ = tx.send(Message::RobotMoved { id, pos: next });
             push_recent_position(&mut recent_positions, current, 4);
             push_recent_position(&mut recent_positions, next, 4);
