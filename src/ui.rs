@@ -4,20 +4,37 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use ratatui::Frame;
 
-use crate::model::{Position, ResourceKind, RobotKind, WorldState};
+use crate::model::{Position, ResourceKind, RobotKind, Tile, WorldState};
 
-/// Draws the current world snapshot and the high-level base stats.
-pub(crate) fn draw_ui(frame: &mut Frame, world: &WorldState) {
-    let chunks = Layout::vertical([Constraint::Length(3), Constraint::Min(1)]).split(frame.area());
-    let stats = Paragraph::new(format!(
-        "Energy: {}  Crystals: {}  Known resources: {}",
+/// Draws multiple independent world snapshots in a 2x2 grid.
+pub(crate) fn draw_ui(frame: &mut Frame, worlds: &[WorldState]) {
+    let rows = Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(frame.area());
+    let top = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(rows[0]);
+    let bottom = Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .split(rows[1]);
+    let panels = [top[0], top[1], bottom[0], bottom[1]];
+
+    for (index, area) in panels.into_iter().enumerate() {
+        if let Some(world) = worlds.get(index) {
+            render_world_panel(frame, area, world, index + 1);
+        } else {
+            let empty = Paragraph::new("No simulation")
+                .block(Block::default().borders(Borders::ALL).title(format!("Simulation {}", index + 1)));
+            frame.render_widget(empty, area);
+        }
+    }
+}
+
+fn render_world_panel(frame: &mut Frame, area: ratatui::layout::Rect, world: &WorldState, index: usize) {
+    let title = format!(
+        "Sim {} | Energy: {}  Crystals: {}  Known resources: {}",
+        index,
         world.total_energy,
         world.total_crystals,
         world.known_resources.len()
-    ))
-    .block(Block::default().borders(Borders::ALL).title("Base"));
-    frame.render_widget(stats, chunks[0]);
-
+    );
     let robots_by_pos: std::collections::HashMap<Position, RobotKind> =
         world.robots.iter().map(|r| (r.pos, r.kind)).collect();
     let mut lines = Vec::with_capacity(world.map.height);
@@ -34,25 +51,25 @@ pub(crate) fn draw_ui(frame: &mut Frame, world: &WorldState) {
                     RobotKind::Collector => ('o', Color::Magenta),
                 }
             } else {
-                match world.map.tile_at(pos).unwrap_or(&crate::model::Tile::Empty) {
-                    crate::model::Tile::Obstacle => ('0', Color::LightCyan),
-                    crate::model::Tile::Resource {
+                match world.map.tile_at(pos).unwrap_or(&Tile::Empty) {
+                    Tile::Obstacle => ('0', Color::LightCyan),
+                    Tile::Resource {
                         kind: ResourceKind::Energy,
                         ..
                     } => ('E', Color::Green),
-                    crate::model::Tile::Resource {
+                    Tile::Resource {
                         kind: ResourceKind::Crystal,
                         ..
                     } => ('C', Color::LightMagenta),
-                    crate::model::Tile::Base => ('#', Color::LightGreen),
-                    crate::model::Tile::Empty => ('.', Color::DarkGray),
+                    Tile::Base => ('#', Color::LightGreen),
+                    Tile::Empty => ('.', Color::DarkGray),
                 }
             };
             spans.push(Span::styled(ch.to_string(), Style::default().fg(color)));
         }
         lines.push(Line::from(spans));
     }
-    let map_widget =
-        Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title("Simulation"));
-    frame.render_widget(map_widget, chunks[1]);
+    let map_widget = Paragraph::new(lines)
+        .block(Block::default().borders(Borders::ALL).title(title));
+    frame.render_widget(map_widget, area);
 }

@@ -7,7 +7,9 @@ use std::time::Duration;
 
 use rand::Rng;
 
-use crate::model::{Message, Position, ResourceKind, Tile, WorldState};
+use crate::model::{Message, Position, ResourceKind, Tile, WorldState, Map, SCOUT_COUNT, COLLECTOR_COUNT, MAP_WIDTH, MAP_HEIGHT};
+
+pub(crate) const SIMULATION_COUNT: usize = 4;
 
 fn neighbors(pos: Position) -> [Position; 4] {
     [
@@ -367,6 +369,69 @@ pub(crate) fn process_messages(world: &Arc<Mutex<WorldState>>, rx: &Receiver<Mes
             }
             Message::Deposited(ResourceKind::Energy) => world.total_energy += 1,
             Message::Deposited(ResourceKind::Crystal) => world.total_crystals += 1,
+        }
+    }
+}
+
+/// Owns one independent simulation world and the worker threads that animate it.
+pub(crate) struct SimulationInstance {
+    world: Arc<Mutex<WorldState>>,
+    rx: Receiver<Message>,
+    running: Arc<AtomicBool>,
+    workers: Vec<thread::JoinHandle<()>>,
+}
+
+impl SimulationInstance {
+    /// Builds a fresh world and starts its scouts and collectors.
+    pub(crate) fn spawn() -> Self {
+        let mut rng = rand::rng();
+        let map = Map::generate(MAP_WIDTH, MAP_HEIGHT, &mut rng);
+        let world = Arc::new(Mutex::new(WorldState::new(
+            map,
+            SCOUT_COUNT,
+            COLLECTOR_COUNT,
+        )));
+        let (tx, rx) = std::sync::mpsc::channel();
+        let running = Arc::new(AtomicBool::new(true));
+
+        let mut workers = Vec::new();
+        for robot in {
+            let world = world.lock().expect("world lock poisoned");
+            world.robots.clone()
+        } {
+            let tx = tx.clone();
+            let world = Arc::clone(&world);
+            let running = Arc::clone(&running);
+            workers.push(if robot.kind.can_collect() {
+                spawn_collector(robot.id, world, tx, running)
+            } else {
+                spawn_scout(robot.id, world, tx, running)
+            });
+        }
+
+        Self {
+            world,
+            rx,
+            running,
+            workers,
+        }
+    }
+
+    /// Drains pending worker messages into the world snapshot.
+    pub(crate) fn process_messages(&self) {
+        process_messages(&self.world, &self.rx);
+    }
+
+    /// Returns a cloned snapshot for rendering.
+    pub(crate) fn snapshot(&self) -> WorldState {
+        self.world.lock().expect("world lock poisoned").clone()
+    }
+
+    /// Stops the workers and waits for them to finish.
+    pub(crate) fn stop(mut self) {
+        self.running.store(false, Ordering::Relaxed);
+        for worker in self.workers.drain(..) {
+            let _ = worker.join();
         }
     }
 }
