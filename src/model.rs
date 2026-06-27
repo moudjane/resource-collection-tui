@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use noise::{NoiseFn, Perlin};
 use rand::Rng;
@@ -44,6 +44,44 @@ pub(crate) struct Map {
 }
 
 impl Map {
+    fn is_pos_surrounded(&self, pos: Position) -> bool {
+        let start_idx = self.idx(pos);
+
+        let mut visited = vec![false; self.width * self.height];
+        let mut queue = VecDeque::new();
+
+        queue.push_back(pos);
+        visited[start_idx] = true;
+
+        let directions = [(-1, 0), (1, 0), (0, -1), (0, 1)].map(|(x, y)| Position { x, y });
+
+        let (width, height) = (self.width as i32, self.height as i32);
+
+        while let Some(pos) = queue.pop_front() {
+            if pos.x == 0 || pos.y == 0 || pos.x == width - 1 || pos.y == height - 1 {
+                return false;
+            }
+
+            for dir in directions.iter() {
+                let new_pos = Position {
+                    x: pos.x + dir.x,
+                    y: pos.y + dir.y,
+                };
+
+                if new_pos.y < height && new_pos.x < width as i32 {
+                    let n_idx = self.idx(new_pos);
+
+                    if !visited[n_idx] && self.is_passable(new_pos) {
+                        visited[n_idx] = true;
+                        queue.push_back(new_pos);
+                    }
+                }
+            }
+        }
+
+        true
+    }
+
     /// Builds the world layout and seeds resources using Perlin noise.
     pub(crate) fn generate(width: usize, height: usize, rng: &mut impl Rng) -> Self {
         let base = Position {
@@ -73,6 +111,22 @@ impl Map {
                 }
             }
         }
+
+        let base = {
+            let mut point = base;
+            loop {
+                if !map.is_pos_surrounded(point)
+                    && let Some(Tile::Empty) = map.tile_at(point)
+                {
+                    break point;
+                }
+                point = Position {
+                    x: rng.random_range(0..map.width as i32),
+                    y: rng.random_range(0..map.height as i32),
+                };
+            }
+        };
+        map.base = base;
         map.set_tile(base, Tile::Base);
         map.place_resources(ResourceKind::Energy, 16, rng);
         map.place_resources(ResourceKind::Crystal, 16, rng);
