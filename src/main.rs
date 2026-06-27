@@ -1,6 +1,6 @@
 use std::io;
 use std::sync::mpsc;
-use std::thread::{self, current};
+use std::thread;
 use std::time::Duration;
 
 use crossterm::event::{self, Event};

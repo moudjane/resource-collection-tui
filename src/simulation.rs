@@ -267,7 +267,6 @@ pub(crate) fn spawn_collector(
 ) -> thread::JoinHandle<()> {
     thread::spawn(move || {
         let mut carrying: Option<ResourceKind> = None;
-        let mut rng = rand::rng();
         let mut recent_positions = VecDeque::with_capacity(6);
         while running.load(Ordering::Relaxed) {
             let (current, base, known_resources) = {
