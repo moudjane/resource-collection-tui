@@ -43,30 +43,27 @@ pub(crate) fn discover_surroundings(
     known_obstacles: &mut HashSet<Position>,
     known_resources: &mut HashSet<Position>,
 ) {
-    let mut found = Vec::new();
-    {
-        let world = world.lock().expect("world lock poisoned");
-        for dy in -1..=1 {
-            for dx in -1..=1 {
-                let pos = Position {
-                    x: center.x + dx,
-                    y: center.y + dy,
-                };
-                if let Some(tile) = world.map.tile_at(pos) {
-                    found.push((pos, tile.clone()));
+    let world = world.lock().expect("world lock poisoned");
+    for dy in -1..=1 {
+        for dx in -1..=1 {
+            let pos = Position {
+                x: center.x + dx,
+                y: center.y + dy,
+            };
+            if let Some(tile) = world.map.tile_at(pos) {
+                match tile {
+                    Tile::Obstacle if known_obstacles.insert(pos) => {
+                        let _ = tx.send(Message::ObstacleFound(pos));
+                    }
+                    Tile::Resource { kind, .. } if known_resources.insert(pos) => {
+                        let _ = tx.send(Message::ResourceFound {
+                            pos,
+                            kind: kind.clone(),
+                        });
+                    }
+                    _ => {}
                 }
             }
-        }
-    }
-    for (pos, tile) in found {
-        match tile {
-            Tile::Obstacle if known_obstacles.insert(pos) => {
-                let _ = tx.send(Message::ObstacleFound(pos));
-            }
-            Tile::Resource { kind, .. } if known_resources.insert(pos) => {
-                let _ = tx.send(Message::ResourceFound { pos, kind });
-            }
-            _ => {}
         }
     }
 }
