@@ -7,11 +7,9 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use crate::model::{Position, ResourceKind, RobotKind, Tile, WorldState};
 
 /// Draws multiple independent world snapshots in a 2x2 grid.
-pub(crate) fn draw_ui(frame: &mut Frame, worlds: &[WorldState], msg: &str) {
-    let big_rows = Layout::vertical([Constraint::Percentage(90), Constraint::Percentage(10)])
-        .split(frame.area());
+pub(crate) fn draw_ui(frame: &mut Frame, worlds: &[WorldState]) {
     let rows = Layout::vertical([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(big_rows[0]);
+        .split(frame.area());
     let top =
         Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)]).split(rows[0]);
     let bottom =
@@ -30,11 +28,6 @@ pub(crate) fn draw_ui(frame: &mut Frame, worlds: &[WorldState], msg: &str) {
             frame.render_widget(empty, area);
         }
     }
-
-    frame.render_widget(
-        Paragraph::new(msg).block(Block::default().borders(Borders::ALL)),
-        big_rows[1],
-    );
 }
 
 fn render_world_panel(

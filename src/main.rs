@@ -25,14 +25,12 @@ fn run_app() -> io::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let (tx, rx) = mpsc::channel();
+    let (tx, _rx) = mpsc::channel();
 
     let simulations: Vec<SimulationInstance> = (0..SIMULATION_COUNT - 1)
         .map(|_| SimulationInstance::spawn(None))
         .chain(std::iter::once(SimulationInstance::spawn(Some(tx))))
         .collect();
-
-    let mut last_msg = String::new();
 
     let mut exit_requested = false;
     while !exit_requested {
@@ -43,10 +41,8 @@ fn run_app() -> io::Result<()> {
             .iter()
             .map(SimulationInstance::snapshot)
             .collect();
-        if let Some(msg) = rx.try_iter().last() {
-            last_msg = msg;
-        }
-        terminal.draw(|f| draw_ui(f, &snapshots, &last_msg))?;
+
+        terminal.draw(|f| draw_ui(f, &snapshots))?;
         if event::poll(Duration::from_millis(20))? && matches!(event::read()?, Event::Key(_)) {
             exit_requested = true;
         }
