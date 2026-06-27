@@ -30,3 +30,6 @@ jobs:
 
       - name: Run the test suite
         run: cargo test --locked
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
