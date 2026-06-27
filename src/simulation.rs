@@ -56,10 +56,7 @@ pub(crate) fn discover_surroundings(
                         let _ = tx.send(Message::ObstacleFound(pos));
                     }
                     Tile::Resource { kind, .. } if known_resources.insert(pos) => {
-                        let _ = tx.send(Message::ResourceFound {
-                            pos,
-                            kind: *kind,
-                        });
+                        let _ = tx.send(Message::ResourceFound { pos, kind: *kind });
                     }
                     _ => {}
                 }
@@ -318,22 +315,23 @@ pub(crate) fn spawn_collector(
                     let mut world = world.lock().expect("world lock poisoned");
                     if let Some(Tile::Resource { kind, amount }) =
                         world.map.tile_at(current).cloned()
-                        && amount > 0 {
-                            carrying = Some(kind);
-                            let remaining = amount - 1;
-                            if remaining == 0 {
-                                world.map.set_tile(current, Tile::Empty);
-                                let _ = tx.send(Message::ResourceDepleted(current));
-                            } else {
-                                world.map.set_tile(
-                                    current,
-                                    Tile::Resource {
-                                        kind,
-                                        amount: remaining,
-                                    },
-                                );
-                            }
+                        && amount > 0
+                    {
+                        carrying = Some(kind);
+                        let remaining = amount - 1;
+                        if remaining == 0 {
+                            world.map.set_tile(current, Tile::Empty);
+                            let _ = tx.send(Message::ResourceDepleted(current));
+                        } else {
+                            world.map.set_tile(
+                                current,
+                                Tile::Resource {
+                                    kind,
+                                    amount: remaining,
+                                },
+                            );
                         }
+                    }
                 } else {
                     let next = {
                         let world = world.lock().expect("world lock poisoned");
