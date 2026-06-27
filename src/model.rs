@@ -68,7 +68,7 @@ impl Map {
                     y: pos.y + dir.y,
                 };
 
-                if new_pos.y < height && new_pos.x < width as i32 {
+                if new_pos.y < height && new_pos.x < width {
                     let n_idx = self.idx(new_pos);
 
                     if !visited[n_idx] && self.is_passable(new_pos) {

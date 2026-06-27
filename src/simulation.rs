@@ -58,7 +58,7 @@ pub(crate) fn discover_surroundings(
                     Tile::Resource { kind, .. } if known_resources.insert(pos) => {
                         let _ = tx.send(Message::ResourceFound {
                             pos,
-                            kind: kind.clone(),
+                            kind: *kind,
                         });
                     }
                     _ => {}
@@ -318,8 +318,7 @@ pub(crate) fn spawn_collector(
                     let mut world = world.lock().expect("world lock poisoned");
                     if let Some(Tile::Resource { kind, amount }) =
                         world.map.tile_at(current).cloned()
-                    {
-                        if amount > 0 {
+                        && amount > 0 {
                             carrying = Some(kind);
                             let remaining = amount - 1;
                             if remaining == 0 {
@@ -335,7 +334,6 @@ pub(crate) fn spawn_collector(
                                 );
                             }
                         }
-                    }
                 } else {
                     let next = {
                         let world = world.lock().expect("world lock poisoned");
