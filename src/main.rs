@@ -50,7 +50,7 @@ fn run_app() -> io::Result<()> {
         if event::poll(Duration::from_millis(20))? && matches!(event::read()?, Event::Key(_)) {
             exit_requested = true;
         }
-        thread::sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(40));
     }
 
     for simulation in simulations {

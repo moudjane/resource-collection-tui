@@ -246,7 +246,7 @@ pub(crate) fn spawn_scout(
             let _ = tx.send(Message::RobotMoved { id, pos: next });
             push_recent_position(&mut recent_positions, current, 4);
             push_recent_position(&mut recent_positions, next, 4);
-            thread::sleep(Duration::from_millis(938));
+            thread::sleep(Duration::from_millis(40));
         }
     })
 }
@@ -289,7 +289,7 @@ pub(crate) fn spawn_collector(
                 }
                 push_recent_position(&mut recent_positions, current, 6);
                 push_recent_position(&mut recent_positions, next, 6);
-                thread::sleep(Duration::from_millis(1000));
+                thread::sleep(Duration::from_millis(40));
                 continue;
             }
 
@@ -344,7 +344,7 @@ pub(crate) fn spawn_collector(
                     push_recent_position(&mut recent_positions, next, 6);
                 }
             }
-            thread::sleep(Duration::from_millis(1000));
+            thread::sleep(Duration::from_millis(40));
         }
     })
 }
