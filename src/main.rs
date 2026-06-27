@@ -1,5 +1,6 @@
 use std::io;
-use std::thread;
+use std::sync::mpsc;
+use std::thread::{self, current};
 use std::time::Duration;
 
 use crossterm::event::{self, Event};
@@ -7,8 +8,8 @@ use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
+use ratatui::backend::CrosstermBackend;
 
 mod model;
 mod simulation;
@@ -24,21 +25,32 @@ fn run_app() -> io::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let simulations: Vec<SimulationInstance> = (0..SIMULATION_COUNT)
-        .map(|_| SimulationInstance::spawn())
+    let (tx, rx) = mpsc::channel();
+
+    let simulations: Vec<SimulationInstance> = (0..SIMULATION_COUNT - 1)
+        .map(|_| SimulationInstance::spawn(None))
+        .chain(std::iter::once(SimulationInstance::spawn(Some(tx))))
         .collect();
+
+    let mut last_msg = String::new();
 
     let mut exit_requested = false;
     while !exit_requested {
         for simulation in &simulations {
             simulation.process_messages();
         }
-        let snapshots: Vec<_> = simulations.iter().map(SimulationInstance::snapshot).collect();
-        terminal.draw(|f| draw_ui(f, &snapshots))?;
+        let snapshots: Vec<_> = simulations
+            .iter()
+            .map(SimulationInstance::snapshot)
+            .collect();
+        if let Some(msg) = rx.try_iter().last() {
+            last_msg = msg;
+        }
+        terminal.draw(|f| draw_ui(f, &snapshots, &last_msg))?;
         if event::poll(Duration::from_millis(20))? && matches!(event::read()?, Event::Key(_)) {
             exit_requested = true;
         }
-        thread::sleep(Duration::from_millis(40));
+        thread::sleep(Duration::from_millis(500));
     }
 
     for simulation in simulations {
