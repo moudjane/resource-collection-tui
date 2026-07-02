@@ -3,7 +3,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use crossterm::event::{self, Event};
+use crossterm::event::{self, Event, KeyEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -43,8 +43,12 @@ fn run_app() -> io::Result<()> {
             .collect();
 
         terminal.draw(|f| draw_ui(f, &snapshots))?;
-        if event::poll(Duration::from_millis(20))? && matches!(event::read()?, Event::Key(_)) {
-            exit_requested = true;
+        if event::poll(Duration::from_millis(20))? {
+            if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    exit_requested = true;
+                }
+            }
         }
         thread::sleep(Duration::from_millis(40));
     }
